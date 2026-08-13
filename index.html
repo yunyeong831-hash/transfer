@@ -6,17 +6,6 @@
 <title>온라인이전 대시보드 — 미리보기</title>
 <script src="./support.js"></script>
 <style>
-  #dc-prev-bar{position:fixed; left:16px; bottom:16px; z-index:9990; background:#ffffff;
-    border:1px solid #e3e6ea; border-radius:14px; box-shadow:0 10px 30px rgba(16,24,40,0.18);
-    padding:12px 14px; font-family:'Pretendard Variable',Pretendard,-apple-system,'Malgun Gothic',sans-serif; width:280px;}
-  #dc-prev-bar .t{font-size:12px; font-weight:800; color:#1f2328; margin-bottom:3px; display:flex; align-items:center; gap:6px;}
-  #dc-prev-bar .d{font-size:11px; color:#8a9099; line-height:1.5; margin-bottom:10px;}
-  #dc-prev-bar .g{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
-  #dc-prev-bar button{border:1px solid #d3d6db; border-radius:8px; padding:8px 6px; font-size:12px; font-weight:700;
-    cursor:pointer; font-family:inherit; background:#fff; color:#333; transition:all .1s;}
-  #dc-prev-bar button:hover{border-color:#F26F21;}
-  #dc-prev-bar .hint{font-size:10.5px; color:#b0863a; background:#fff7ea; border:1px solid #f5dcae;
-    border-radius:7px; padding:6px 8px; margin-top:9px; line-height:1.5;}
   #dc-entry{font-family:'Pretendard Variable',Pretendard,-apple-system,'Malgun Gothic',sans-serif;}
   #ent-hotspot{ outline:none; }
   #ent-hotspot:hover{ background:rgba(229,72,77,0.12) !important; box-shadow:0 0 0 2px rgba(229,72,77,0.35) inset; }
@@ -24,18 +13,6 @@
 </style>
 </head>
 <body>
-
-<div id="dc-prev-bar">
-  <div class="t">🧪 이전 신청 케이스 전환</div>
-  <div class="d">진입 화면의 <b>“이전신청”</b> 버튼으로 들어오거나 이전대기 탭에서 차량 선택 후, 우측 상단 <b>“이전 신청하기”</b>를 누르세요.</div>
-  <div class="g">
-    <button id="case-정상" onclick="__setCase('정상')">정상</button>
-    <button id="case-이용권부족" onclick="__setCase('이용권부족')">이용권 부족</button>
-    <button id="case-접수불가" onclick="__setCase('접수불가')">접수 불가</button>
-    <button id="case-접수오류" onclick="__setCase('접수오류')">접수 오류</button>
-  </div>
-  <div class="hint">정상 → 진행중 이동 · 접수불가 → 완료(불가) 이동 · 이용권부족/접수오류 → 대기 유지</div>
-</div>
 
 
 <div id="dc-entry" style="position:fixed; inset:0; z-index:500; background:#eef0f3; overflow:auto; display:none; flex-direction:column;">
@@ -1124,7 +1101,6 @@ class Component extends DCLogic {
     hs.style.left=HOTSPOT.left; hs.style.top=HOTSPOT.top; hs.style.width=HOTSPOT.width; hs.style.height=HOTSPOT.height;
     el('dc-entry').style.display='flex';
     var back=el('dc-back'); if(back) back.style.display='none';
-    var bar=el('dc-prev-bar'); if(bar) bar.style.display='none';
   };
   function applyDest(){
     var entry=rootEntry(); if(!entry||!entry.subs) return false;
@@ -1137,19 +1113,10 @@ class Component extends DCLogic {
     if(!applyDest()){ var n=0,id=setInterval(function(){n++; if(applyDest()||n>60) clearInterval(id);},80); }
     el('dc-entry').style.display='none';
     var back=el('dc-back'); if(back) back.style.display='inline-flex';
-    var bar=el('dc-prev-bar'); if(bar) bar.style.display='block';
     window.scrollTo(0,0);
   };
   window.__backToEntry = function(){ window.__showEntry(); };
-  // 케이스 토글바
-  var CASES = ['정상','이용권부족','접수불가','접수오류'];
-  function paintCase(v){ CASES.forEach(function(c){ var b=el('case-'+c); if(b){ b.style.background=(c===v)?'#F26F21':'#fff'; b.style.color=(c===v)?'#fff':'#333'; b.style.borderColor=(c===v)?'#F26F21':'#d3d6db'; } }); }
-  window.__setCase=function(v){
-    var entry=rootEntry();
-    if(entry&&entry.subs){ entry.propOverrides=Object.assign({},entry.propOverrides,{applyResult:v}); entry.subs.forEach(function(fn){fn();}); paintCase(v); }
-    else { var n=0,id=setInterval(function(){ n++; var e=rootEntry(); if(e&&e.subs){ e.propOverrides=Object.assign({},e.propOverrides,{applyResult:v}); e.subs.forEach(function(fn){fn();}); paintCase(v); clearInterval(id);} else if(n>60) clearInterval(id); },80); }
-  };
-  function boot(){ paintCase('정상'); window.__showEntry(); }
+  function boot(){ window.__showEntry(); }
   if(document.readyState!=='loading') boot();
   else document.addEventListener('DOMContentLoaded', boot);
 })();
