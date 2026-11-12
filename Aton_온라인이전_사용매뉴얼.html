@@ -108,6 +108,12 @@ p{margin:0}
 .steps .t{font-weight:700;color:var(--ink)}
 .steps .d{font-size:13px;color:var(--muted)}
 .check{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.nogo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:14px}
+.nogo li{display:flex;gap:8px;align-items:flex-start}
+.nogo li::before{content:"✕";flex:0 0 18px;width:18px;height:18px;margin-top:2px;border-radius:50%;background:var(--no-soft);color:var(--no);font-size:10px;font-weight:800;display:grid;place-items:center}
+.nogo .d{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.box.no{background:var(--no-soft)}
+.box.no h4{color:var(--no)}
 .check li::before{content:"✓";color:var(--orange);font-weight:800;margin-right:8px}
 
 figure{margin:0}
@@ -273,8 +279,8 @@ figcaption{margin-top:6px;font-size:12px;color:var(--muted)}
     <div class="viewport" aria-roledescription="carousel"><div class="track" id="track">
 
       <!-- 1. 온라인이전이란 -->
-      <section class="slide" data-ch="온라인이전이란">
-        <div class="head"><h2>온라인이전 이란?</h2></div>
+      <section class="slide" data-ch="온라인이전이란" data-sub="개요">
+        <div class="head"><h2>온라인이전 이란?</h2><span class="pageno">1 / 2</span></div>
         <p class="lead">온라인이전은 제시매도 시스템에 연결된 서비스로, 이전을 온라인으로 신청하는 서비스입니다.<br>이전 진행 상태부터 완료 후 자동차등록증까지 온라인으로 간편하게 확인할 수 있습니다.</p>
         <div class="stack">
           <span class="label">진행 단계</span>
@@ -295,6 +301,49 @@ figcaption{margin-top:6px;font-size:12px;color:var(--muted)}
           </div>
         </div>
         <p style="font-size:13px;color:var(--muted)">※ 매도 차량만 신청할 수 있습니다.</p>
+      </section>
+
+      <!-- 1. 온라인이전이란 (2/2) 이용 불가 안내 -->
+      <section class="slide" data-ch="온라인이전이란" data-sub="이용 불가 안내">
+        <div class="head"><h2>온라인이전이 안 되는 경우</h2><span class="pageno">2 / 2</span></div>
+        <p class="lead">아래에 해당하면 온라인이전을 이용할 수 없습니다. 신청 전에 꼭 확인해 주세요.</p>
+        <div class="box no">
+          <h4>이용 불가 상사</h4>
+          <ul class="nogo"><li><span>상사 대표자가 <b>공동명의</b>인 경우, 온라인이전 서비스를 이용할 수 없습니다.</span></li></ul>
+        </div>
+        <div class="stack">
+          <span class="label">이전 불가 차량</span>
+          <div class="cols c3" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+            <div class="box line" style="gap:10px">
+              <h4>양수인</h4>
+              <ul class="nogo">
+                <li><span>법인 양수인</span></li>
+                <li><span>외국인 양수인</span></li>
+                <li><span>미성년자 양수인<span class="d">미성년자가 공동양수인에 포함된 경우도 불가</span></span></li>
+                <li><span>2인 이상 공동양수인</span></li>
+              </ul>
+            </div>
+            <div class="box line" style="gap:10px">
+              <h4>차량</h4>
+              <ul class="nogo">
+                <li><span>소유자가 일치하지 않는 차량</span></li>
+                <li><span>압류 · 저당이 있는 차량</span></li>
+                <li><span>차고지증명제 대상 차량<span class="d">사용본거지가 제주특별자치도이고 수소전기차가 아닌 차량 중<br>· 2007.02.01 이후 최초등록한 대형차<br>· 2017.01.01 이후 최초등록한 배기량 1,600cc 이상 중형차</span></span></li>
+              </ul>
+            </div>
+            <div class="box line" style="gap:10px">
+              <h4>보험 · 세금</h4>
+              <ul class="nogo">
+                <li><span>양수인이 자동차보험에 가입하지 않은 차량</span></li>
+                <li><span>자동차세가 미납된 차량</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="box orange">
+          <h4>온라인이전은 가능하지만, 환급은 따로 요청하세요</h4>
+          <p><b>취득세 감면 대상</b>(국가유공자, 장애인, 다자녀 등)은 온라인이전으로 신청할 수 있습니다. 감면받을 취득세는 오프라인으로 별도 환급을 요청해야 합니다.</p>
+        </div>
       </section>
 
       <!-- 2. 두 가지 방식 -->
@@ -355,6 +404,7 @@ figcaption{margin-top:6px;font-size:12px;color:var(--muted)}
             </ul>
           </div>
         </div>
+        <p style="font-size:13px;color:var(--no)">※ 상사 대표자가 공동명의인 경우 온라인이전 서비스를 이용할 수 없습니다.</p>
       </section>
 
       <!-- 3. 서비스 가입신청 (2/6) -->
