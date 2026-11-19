@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원프로세스 프로토타입</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<style>
+:root{
+  --ink:#2b2b2b; --text:#444; --muted:#7a7f87; --line:#d9dce1;
+  --orange:#ff6f0f; --orange-soft:#fff3ea;
+  --blue:#2f6bff;   --blue-soft:#eaf1ff;
+  --green:#157a55;  --green-soft:#e6f4ee;
+  --gray-soft:#f1f3f6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#e9ebef;font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+/* 상단 바 */
+.bar{position:fixed;left:0;right:0;top:0;height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#fff;border-bottom:1px solid #e1e4e8;z-index:10}
+.bar a.home{font-size:13px;font-weight:700;color:#3d434c;text-decoration:none;border:1px solid #d3d6db;border-radius:999px;padding:6px 12px}
+.bar a.home:hover{background:#f4f5f7}
+.bar .ttl{font-size:14px;font-weight:800}
+.bar .ctrl{margin-left:auto;display:flex;align-items:center;gap:8px}
+.bar button{font:inherit;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #d3d6db;background:#fff;border-radius:8px;width:34px;height:32px;display:grid;place-items:center;color:#3d434c}
+.bar button:hover{border-color:var(--orange);color:var(--orange)}
+.bar button:disabled{opacity:.35;cursor:default;border-color:#d3d6db;color:#3d434c}
+.bar .cnt{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+.dots{display:flex;gap:6px}
+.dots button{width:9px;height:9px;padding:0;border-radius:50%;border:0;background:#cfd3d9}
+.dots button[aria-current="true"]{background:var(--orange);width:22px;border-radius:5px}
+
+/* 16:9 무대 (1920x1080 기준, 화면에 맞게 축소) */
+.stage{position:fixed;left:0;right:0;top:52px;bottom:0;overflow:hidden}
+.deck{width:1920px;height:1080px;position:absolute;left:50%;top:50%;transform-origin:center center}
+.slide{position:absolute;inset:0;background:#fff;box-shadow:0 18px 50px rgba(16,24,40,.18);overflow:hidden;display:none}
+.slide.on{display:block}
+
+/* 공통 요소 */
+.tag{position:absolute;left:128px;top:104px;height:44px;padding:0 20px;border-radius:999px;display:flex;align-items:center;color:#fff;font-size:24px;font-weight:700}
+.tag.dealer{background:var(--orange)} .tag.customer{background:var(--blue)} .tag.shop{background:var(--green)}
+.h1{position:absolute;left:128px;top:166px;margin:0;font-size:68px;font-weight:800;letter-spacing:-.03em;line-height:1.2}
+
+.chev{position:absolute;left:128px;top:300px;display:flex;height:160px}
+.chev span{width:236px;height:100%;margin-left:-18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:32px;font-weight:700;line-height:1.35;
+  clip-path:polygon(0 0,calc(100% - 26px) 0,100% 50%,calc(100% - 26px) 100%,0 100%,26px 50%)}
+.chev span:first-child{margin-left:0;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 50%,calc(100% - 26px) 100%,0 100%)}
+.chev span small{display:block;font-size:30px}
+.t-dealer .chev span{background:var(--orange-soft);color:var(--orange)}   .t-dealer .chev span.on{background:var(--orange);color:#fff}
+.t-customer .chev span{background:var(--blue-soft);color:var(--blue)}     .t-customer .chev span.on{background:var(--blue);color:#fff}
+.t-shop .chev span{background:var(--green-soft);color:var(--green)}       .t-shop .chev span.on{background:var(--green);color:#fff}
+
+.steps{position:absolute;left:128px;top:528px;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:22px}
+.steps li{display:flex;align-items:center;gap:22px;font-size:31px;color:var(--ink);letter-spacing:-.01em}
+.steps .n{flex:0 0 44px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800}
+.t-dealer .steps .n{background:var(--orange-soft);color:var(--orange)}
+.t-customer .steps .n{background:var(--blue-soft);color:var(--blue)}
+.note{position:absolute;left:128px;top:822px;padding-left:22px;font-size:27px;color:#6b7078;line-height:1.5}
+.note::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:2px}
+.t-dealer .note::before{background:var(--orange)} .t-customer .note::before{background:var(--blue)}
+
+/* 프로토타입(iframe) 자리 */
+.proto{position:absolute;left:1386px;top:120px;width:454px;height:960px;border-radius:28px 28px 0 0;overflow:hidden;background:#f6f7f9;border:1px solid #e3e6ea;border-bottom:0}
+.proto iframe{display:block;width:100%;height:100%;border:0}
+/* Figma 임베드는 폰 둘레에 여백(약 28%)을 두고 그리므로, iframe을 크게 키워 여백을 칸 밖으로 잘라냄 */
+.proto:not(.wide) iframe{width:350px;height:740px;transform:translate(-88px,-186px) scale(1.8);transform-origin:0 0}
+.proto:not(.wide){background:#fff;border:0;border-radius:0}
+/* 칸 가장자리에 생기는 회색 잔선 가리기 */
+.proto:not(.wide)::after{content:"";position:absolute;inset:-1px;box-shadow:inset 0 0 0 4px #fff;pointer-events:none}
+/* Figma 임베드의 검은 배경을 폰 모양 구멍이 뚫린 흰 덮개로 가림 */
+.proto .mask{position:absolute;left:1px;top:14px;width:452px;height:940px;border-radius:66px;box-shadow:0 0 0 600px #fff;pointer-events:none}
+.proto .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#9aa0a8;font-size:22px;font-weight:600;text-align:center;line-height:1.5}
+.proto .ph b{font-size:26px;color:#6b7078}
+.proto.wide{left:296px;top:302px;width:1368px;height:778px;border-radius:12px 12px 0 0;background:#fff}
+.proto.wide img{display:block;width:100%;height:auto}
+
+/* 1. 표지 */
+.cover .logo{position:absolute;left:128px;top:128px;width:346px;height:auto}
+.cover h1{position:absolute;left:124px;top:290px;margin:0;font-size:136px;font-weight:800;letter-spacing:-.03em;color:#2b2b2b;line-height:1.1}
+.cover p{position:absolute;left:128px;top:470px;margin:0;font-size:40px;line-height:1.5;color:#6b7078}
+.flow{position:absolute;left:128px;top:781px;display:flex;align-items:center}
+.flow span{height:85px;padding:0 40px;border:2px solid var(--line);border-radius:999px;display:flex;align-items:center;font-size:33px;font-weight:700;color:var(--ink);background:#fff}
+.flow i{width:58px;height:2px;background:var(--line)}
+
+/* 2. 전체 흐름 */
+.ov .eyebrow{position:absolute;left:128px;top:128px;font-size:27px;font-weight:700;letter-spacing:.08em;color:var(--orange)}
+.ov h2{position:absolute;left:128px;top:168px;margin:0;font-size:66px;font-weight:800;letter-spacing:-.03em}
+.ov .grid{position:absolute;left:128px;top:340px;width:1664px}
+.ov .head{display:flex;margin-left:160px;height:200px}
+.ov .head>div{flex:1;margin-left:-18px;padding:40px 0 0 50px;background:var(--gray-soft);clip-path:polygon(0 0,calc(100% - 36px) 0,100% 50%,calc(100% - 36px) 100%,0 100%,36px 50%)}
+.ov .head>div:first-child{margin-left:0;padding-left:24px;clip-path:polygon(0 0,calc(100% - 36px) 0,100% 50%,calc(100% - 36px) 100%,0 100%)}
+.ov .head .s{font-size:22px;color:var(--muted);font-weight:500}
+.ov .head .t{font-size:40px;font-weight:800;margin:4px 0 12px;white-space:nowrap}
+.ov .head .t small{font-size:24px;font-weight:500;color:var(--muted)}
+.ov .pill{display:inline-block;font-size:19px;font-weight:700;padding:3px 13px;border-radius:999px;margin-right:6px}
+.ov .pill.d{background:var(--orange-soft);color:var(--orange)} .ov .pill.c{background:var(--blue-soft);color:var(--blue)} .ov .pill.g{background:var(--green-soft);color:var(--green)}
+.ov .row{display:flex;margin-top:14px;border-radius:14px;padding:30px 0}
+.ov .row .lab{flex:0 0 184px;padding-left:28px;font-size:30px;font-weight:800;line-height:1.2;display:flex;align-items:center}
+.ov .row .cell{flex:1;font-size:25px;line-height:1.45;color:var(--text);padding-right:20px}
+.ov .row.d{background:#fff6ef} .ov .row.d .lab{color:var(--orange)}
+.ov .row.g{background:#e7f4ef} .ov .row.g .lab{color:var(--green)}
+.ov .row.c{background:#edf3ff} .ov .row.c .lab{color:var(--blue)}
+
+/* 7. 온라인이전 */
+.t-shop .chev.sm{left:auto;right:128px;top:145px;height:99px}
+.t-shop .chev.sm span{width:150px;font-size:22px;margin-left:-14px;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,0 100%,22px 50%)}
+.t-shop .chev.sm span:first-child{margin-left:0;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,0 100%)}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="home" href="./index.html">← 처음으로</a>
+  <span class="ttl">원프로세스 프로토타입</span>
+  <div class="ctrl">
+    <div class="dots" id="dots"></div>
+    <button id="prev" aria-label="이전 슬라이드">‹</button>
+    <span class="cnt" id="cnt">1 / 8</span>
+    <button id="next" aria-label="다음 슬라이드">›</button>
+  </div>
+</header>
+
+<main class="stage"><div class="deck" id="deck">
+
+  <!-- 1. 표지 -->
+  <section class="slide cover">
+    <img class="logo" src="oneprocess_img/logo.png" alt="mobility365">
+    <h1>One Process</h1>
+    <p>할부, 보험, 전자계약부터 이전등록까지,<br>중고차 구매의 모든 단계를 하나의 서비스로 연결합니다.</p>
+    <div class="flow"><span>차량 선택</span><i></i><span>할부</span><i></i><span>보험</span><i></i><span>전자계약</span><i></i><span>온라인 이전</span></div>
+  </section>
+
+  <!-- 2. 전체 흐름 -->
+  <section class="slide ov">
+    <div class="eyebrow">ONE PROCESS</div>
+    <h2>할부, 보험, 전자계약 그리고 이전까지, 하나의 흐름으로</h2>
+    <div class="grid">
+      <div class="head">
+        <div><div class="s">STEP 1</div><div class="t">차량 선택</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 2</div><div class="t">할부</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 3</div><div class="t">보험</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 4</div><div class="t">전자계약 <small>(+보험)</small></div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 5</div><div class="t">온라인 이전</div><span class="pill g">상사/사무장</span><span class="pill c">고객</span></div>
+      </div>
+      <div class="row d"><div class="lab">딜러</div><div class="cell">고객과 차량 상담</div><div class="cell">m365에서<br>할부상담 신청 연계</div><div class="cell">보험상담 ·<br>다이렉트 보험 연계</div><div class="cell">전자계약 작성,<br>서명 요청</div><div class="cell"></div></div>
+      <div class="row g"><div class="lab">상사/<br>사무장</div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell">온라인으로<br>이전등록 진행</div></div>
+      <div class="row c"><div class="lab">고객</div><div class="cell">구매할 차량 선택</div><div class="cell">문자 링크로<br>금융사 페이지에서<br>바로 신청</div><div class="cell">문자 링크로<br>바로 가입 및 상담신청</div><div class="cell">알림톡으로 받아<br>전자서명부터<br>보험가입 및 상담신청</div><div class="cell">완료 알림톡으로<br>자동차등록증 수신</div></div>
+    </div>
+  </section>
+
+  <!-- 3. 딜러 · 할부상담 신청 연계 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">할부상담 신청 연계</h2>
+    <div class="chev"><span>차량 선택</span><span class="on">할부</span><span>보험</span><span>전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>차량목록에서 할부 상담 진행할 차량 선택</li>
+      <li><span class="n">2</span>고객 이름/휴대폰 번호 입력 후 [한도조회] or [상담신청] 선택</li>
+      <li><span class="n">3</span>딜러가 문자로 안내메세지 및 url 전송</li>
+    </ol>
+    <p class="note">할부 한도조회 또는 상담신청 시 필요한 차량 데이터 제공 가능</p>
+    <div class="proto" id="proto-installment">
+      <iframe aria-label="할부상담 신청 연계 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=102-1295&viewport=137%2C87%2C0.38&scaling=scale-down&content-scaling=fixed&starting-point-node-id=102%3A1295&show-proto-sidebar=0&hide-ui=1&page-id=102%3A1021&embed-host=share" allowfullscreen loading="lazy"></iframe>
+      <div class="mask"></div>
+    </div>
+  </section>
+
+  <!-- 4. 딜러 · 보험 가입 연계 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">보험 가입 연계</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span class="on">보험</span><span>전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>차량목록에서 차량 선택</li>
+      <li><span class="n">2</span>고객 이름/휴대폰 번호 입력 후 [다이렉트] or [비교견적] 선택</li>
+      <li><span class="n">3</span>딜러가 문자로 안내메세지 및 url 전송</li>
+    </ol>
+    <p class="note">현장에서 하던 업무 스타일 그대로,</p>
+    <div class="proto" id="proto-insurance">
+      <iframe aria-label="보험 가입 연계 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=102-1612&viewport=137%2C87%2C0.38&scaling=scale-down&content-scaling=fixed&starting-point-node-id=102%3A1612&show-proto-sidebar=0&hide-ui=1&page-id=102%3A1021&embed-host=share" allowfullscreen loading="lazy"></iframe>
+      <div class="mask"></div>
+    </div>
+  </section>
+
+  <!-- 5. 딜러 · 전자계약 작성 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">전자계약 작성</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span class="on">전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>매도계약 작성 선택</li>
+      <li><span class="n">2</span>계약정보 및 고객정보 입력</li>
+      <li><span class="n">3</span>딜러 서명 후 전자계약 전송</li>
+    </ol>
+    <div class="proto" id="proto-econtract">
+      <iframe aria-label="전자계약 작성 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=1-4312&viewport=270%2C354%2C0.1&scaling=scale-down&content-scaling=fixed&starting-point-node-id=128%3A1466&show-proto-sidebar=0&hide-ui=1&page-id=0%3A1&embed-host=share" allowfullscreen loading="lazy"></iframe>
+      <div class="mask"></div>
+    </div>
+  </section>
+
+  <!-- 6. 고객 · 전자계약 서명 후 보험 가입 -->
+  <section class="slide t-customer">
+    <div class="tag customer">고객</div>
+    <h2 class="h1">전자계약 서명 후 보험 가입</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span class="on">전자계약<small>(+보험)</small></span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>서명요청 알림톡 수신</li>
+      <li><span class="n">2</span>모바일에서 계약서 확인 후 전자서명</li>
+      <li><span class="n">3</span>이전등록 전 자동차보험 가입 안내</li>
+      <li><span class="n">4</span>보험 미가입 고객은 다이렉트 or 비교견적 상담 신청까지 가능</li>
+    </ol>
+    <p class="note" style="top:862px">이전등록에는 자동차보험 가입이 필요해, 계약 직후가 고객에게 한번 더 보험 가입을 유도합니다.</p>
+    <div class="proto" id="proto-sign">
+      <iframe aria-label="전자계약 서명 후 보험 가입 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=148-1696&viewport=487%2C141%2C0.08&scaling=scale-down&content-scaling=fixed&starting-point-node-id=148%3A1696&show-proto-sidebar=0&hide-ui=1&page-id=102%3A1021&embed-host=share" allowfullscreen loading="lazy"></iframe>
+      <div class="mask"></div>
+    </div>
+  </section>
+
+  <!-- 7. 상사/사무장 · 온라인 이전 신청 -->
+  <section class="slide t-shop">
+    <div class="tag shop">상사/사무장</div>
+    <h2 class="h1">온라인 이전 신청</h2>
+    <div class="chev sm"><span>차량 선택</span><span>할부</span><span>보험</span><span>전자계약</span><span class="on">온라인 이전</span></div>
+    <div class="proto wide" id="proto-transfer">
+      <iframe aria-label="온라인 이전 신청 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=179-4049&viewport=25%2C388%2C0.11&scaling=fit-width&content-scaling=fixed&starting-point-node-id=179%3A4049&show-proto-sidebar=0&hide-ui=1&page-id=179%3A4048&embed-host=share" allowfullscreen loading="lazy"></iframe>
+    </div>
+  </section>
+
+  <!-- 8. 고객 · 이전 완료 후 자동차등록증 확인 -->
+  <section class="slide t-customer">
+    <div class="tag customer">고객</div>
+    <h2 class="h1">이전 완료 후 자동차등록증 확인</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span>전자계약</span><span class="on">온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>이전완료 알림톡 수신</li>
+      <li><span class="n">2</span>휴대폰 번호 뒤 4자리로 본인 확인</li>
+      <li><span class="n">3</span>모바일에서 자동차등록증 바로 확인</li>
+    </ol>
+    <p class="note">고객은 등록증을 따로 받으러 가거나 요청할 필요가 없습니다.</p>
+    <div class="proto" id="proto-certificate">
+      <iframe aria-label="자동차등록증 확인 프로토타입" src="https://embed.figma.com/proto/tBOdSJgaQySjRywz6LpeKi/%ED%94%84%EB%A1%9C%ED%86%A0%ED%83%80%EC%9E%85_%EC%A1%B0%ED%95%A9%EC%8B%9C%EC%97%B0%EC%9A%A9?node-id=152-2952&viewport=487%2C141%2C0.08&scaling=scale-down&content-scaling=fixed&starting-point-node-id=152%3A2952&show-proto-sidebar=0&hide-ui=1&page-id=102%3A1021&embed-host=share" allowfullscreen loading="lazy"></iframe>
+      <div class="mask"></div>
+    </div>
+  </section>
+
+</div></main>
+
+<script>
+(function(){
+  var deck=document.getElementById('deck'), slides=[].slice.call(deck.querySelectorAll('.slide'));
+  var dots=document.getElementById('dots'), cnt=document.getElementById('cnt'), prev=document.getElementById('prev'), next=document.getElementById('next');
+  var cur=0;
+  slides.forEach(function(_,i){ var b=document.createElement('button'); b.setAttribute('aria-label',(i+1)+'번 슬라이드'); b.addEventListener('click',function(){go(i)}); dots.appendChild(b); });
+  function fit(){ var st=deck.parentNode, s=Math.min(st.clientWidth/1920, st.clientHeight/1080)*0.95; deck.style.transform='translate(-50%,-50%) scale('+s+')'; }
+  function go(i){
+    cur=Math.max(0,Math.min(slides.length-1,i));
+    slides.forEach(function(s,k){ s.classList.toggle('on',k===cur); });
+    [].forEach.call(dots.children,function(b,k){ b.setAttribute('aria-current',k===cur); });
+    cnt.textContent=(cur+1)+' / '+slides.length; prev.disabled=cur===0; next.disabled=cur===slides.length-1;
+    if(location.hash!=='#'+(cur+1)) history.replaceState(null,'','#'+(cur+1));
+  }
+  prev.addEventListener('click',function(){go(cur-1)}); next.addEventListener('click',function(){go(cur+1)});
+  document.addEventListener('keydown',function(e){ if(e.key==='ArrowRight'||e.key==='PageDown') go(cur+1); if(e.key==='ArrowLeft'||e.key==='PageUp') go(cur-1); });
+  addEventListener('resize',fit); fit();
+  go((parseInt(location.hash.slice(1),10)||1)-1);
+})();
+</script>
+</body>
+</html>
