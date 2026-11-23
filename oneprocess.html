@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원프로세스 프로토타입</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
+<style>
+:root{
+  --ink:#2b2b2b; --text:#444; --muted:#7a7f87; --line:#d9dce1;
+  --orange:#ff6f0f; --orange-soft:#fff3ea;
+  --blue:#2f6bff;   --blue-soft:#eaf1ff;
+  --green:#157a55;  --green-soft:#e6f4ee;
+  --gray-soft:#f1f3f6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#e9ebef;font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+/* 상단 바 */
+.bar{position:fixed;left:0;right:0;top:0;height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#fff;border-bottom:1px solid #e1e4e8;z-index:10}
+.bar a.home{font-size:13px;font-weight:700;color:#3d434c;text-decoration:none;border:1px solid #d3d6db;border-radius:999px;padding:6px 12px}
+.bar a.home:hover{background:#f4f5f7}
+.bar .ttl{font-size:14px;font-weight:800}
+.bar .ctrl{margin-left:auto;display:flex;align-items:center;gap:8px}
+.bar button{font:inherit;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #d3d6db;background:#fff;border-radius:8px;width:34px;height:32px;display:grid;place-items:center;color:#3d434c}
+.bar button:hover{border-color:var(--orange);color:var(--orange)}
+.bar button:disabled{opacity:.35;cursor:default;border-color:#d3d6db;color:#3d434c}
+.bar .cnt{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+.dots{display:flex;gap:6px}
+.dots button{width:9px;height:9px;padding:0;border-radius:50%;border:0;background:#cfd3d9}
+.dots button[aria-current="true"]{background:var(--orange);width:22px;border-radius:5px}
+
+/* 16:9 무대 (1920x1080 기준, 화면에 맞게 축소) */
+.stage{position:fixed;left:0;right:0;top:52px;bottom:0;overflow:hidden}
+.deck{width:1920px;height:1080px;position:absolute;left:50%;top:50%;transform-origin:center center}
+.slide{position:absolute;inset:0;background:#fff;box-shadow:0 18px 50px rgba(16,24,40,.18);overflow:hidden;visibility:hidden}
+.slide.on{visibility:visible}
+
+/* 공통 요소 */
+.tag{position:absolute;left:128px;top:104px;height:44px;padding:0 20px;border-radius:999px;display:flex;align-items:center;color:#fff;font-size:24px;font-weight:700}
+.tag.dealer{background:var(--orange)} .tag.customer{background:var(--blue)} .tag.shop{background:var(--green)}
+.h1{position:absolute;left:128px;top:166px;margin:0;font-size:68px;font-weight:800;letter-spacing:-.03em;line-height:1.2}
+
+.chev{position:absolute;left:128px;top:300px;display:flex;height:160px}
+.chev span{width:236px;height:100%;margin-left:-18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:32px;font-weight:700;line-height:1.35;
+  clip-path:polygon(0 0,calc(100% - 26px) 0,100% 50%,calc(100% - 26px) 100%,0 100%,26px 50%)}
+.chev span:first-child{margin-left:0;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 50%,calc(100% - 26px) 100%,0 100%)}
+.chev span small{display:block;font-size:30px}
+.t-dealer .chev span{background:var(--orange-soft);color:var(--orange)}   .t-dealer .chev span.on{background:var(--orange);color:#fff}
+.t-customer .chev span{background:var(--blue-soft);color:var(--blue)}     .t-customer .chev span.on{background:var(--blue);color:#fff}
+.t-shop .chev span{background:var(--green-soft);color:var(--green)}       .t-shop .chev span.on{background:var(--green);color:#fff}
+
+.steps{position:absolute;left:128px;top:528px;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:22px}
+.steps li{display:flex;align-items:center;gap:22px;font-size:31px;color:var(--ink);letter-spacing:-.01em}
+.steps .n{flex:0 0 44px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;font-weight:800}
+.t-dealer .steps .n{background:var(--orange-soft);color:var(--orange)}
+.t-customer .steps .n{background:var(--blue-soft);color:var(--blue)}
+.note{position:absolute;left:128px;top:822px;padding-left:22px;font-size:27px;color:#6b7078;line-height:1.5}
+.note::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:2px}
+.t-dealer .note::before{background:var(--orange)} .t-customer .note::before{background:var(--blue)}
+
+/* 프로토타입 자동재생 기기 (Figma 화면 이미지를 순서대로 재생) */
+.dev{position:absolute;cursor:pointer}
+.dev .scr{position:relative;width:100%;height:100%;overflow:hidden;background:#fff}
+.dev .vp{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;background:#fff}
+.dev.phone{left:1391px;top:84px;width:445px;height:931px;border-radius:66px;background:#1d1f23;padding:14px;box-shadow:0 30px 60px rgba(16,24,40,.22),inset 0 0 0 2px #3a3d43}
+.dev.phone .scr{border-radius:52px}
+.dev.phone .vp{width:390px;height:844px;transform:scale(1.0692)}
+.dev.web{left:296px;top:292px;width:1368px;height:700px;border-radius:14px;background:#fff;box-shadow:0 18px 40px rgba(16,24,40,.16);border:1px solid #e3e6ea;overflow:hidden}
+.dev.web .chrome{height:34px;background:#f1f3f6;border-bottom:1px solid #e3e6ea;display:flex;align-items:center;gap:8px;padding:0 14px}
+.dev.web .chrome i{width:11px;height:11px;border-radius:50%;background:#d5d8dd}
+.dev.web .chrome span{margin-left:14px;width:420px;height:22px;border-radius:6px;background:#fff;font-size:13px;color:#9aa0a8;display:flex;align-items:center;padding:0 10px}
+.dev.web .scr{height:calc(100% - 34px)}
+.dev.web .vp{width:1440px;height:701px;transform:scale(.95)}
+.layer{position:absolute;inset:0;background:#fff;transition:transform .45s cubic-bezier(.3,.7,.2,1)}
+.layer.in{transform:translateX(100%)}
+.layer.out{transform:translateX(-28%)}
+.layer.fade{opacity:0}
+.layer{transition:transform .45s cubic-bezier(.3,.7,.2,1),opacity .3s}
+.layer img{display:block;width:100%;transition:transform .9s cubic-bezier(.45,.05,.25,1)}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.25);opacity:0;transition:opacity .35s}
+.dim.on{opacity:1}
+.sheet{position:absolute;left:0;right:0;bottom:0;transform:translateY(100%);transition:transform .4s cubic-bezier(.3,.7,.2,1)}
+.sheet.on{transform:none}
+.sheet img{display:block;width:100%;border-radius:22px 22px 0 0}
+.hi{position:absolute;z-index:5;border:3px solid var(--orange);border-radius:12px;box-shadow:0 0 0 5px rgba(255,111,15,.18);opacity:0;transition:opacity .3s;pointer-events:none}
+.hi.on{opacity:1}
+.cur{position:absolute;z-index:6;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,111,15,.4);border:3px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,.28);opacity:0;transform:scale(1.5);transition:opacity .3s,transform .25s,left .6s ease,top .6s ease;pointer-events:none}
+.cur.on{opacity:1;transform:scale(1)}
+.cur.press{transform:scale(.72);background:rgba(255,111,15,.7)}
+.cur.press::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--orange);animation:rip .55s ease-out forwards}
+@keyframes rip{to{transform:scale(2.4);opacity:0}}
+/* 기기 아래(웹은 위) 진행 막대 */
+.pc{position:absolute;display:flex;align-items:center;gap:12px;color:var(--muted)}
+.pc.phone{left:1391px;top:1030px;width:445px}
+.pc.web{left:296px;top:1010px;width:1368px}
+.pc .seg{flex:1;display:flex;gap:4px}
+.pc .seg i{flex:1;height:6px;border-radius:3px;background:#d3d7dd;transition:background .3s}
+.pc .seg i.done{background:var(--orange)}
+.t-customer .pc .seg i.done{background:var(--blue)} .t-shop .pc .seg i.done{background:var(--green)}
+.pc .num{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;min-width:56px;text-align:right}
+.pc button{font:inherit;font-size:16px;font-weight:700;border:1px solid #d3d6db;background:#fff;border-radius:999px;padding:5px 14px;color:#3d434c;cursor:pointer;white-space:nowrap}
+.pc button:hover{border-color:var(--orange);color:var(--orange)}
+.bar button.play{width:auto;padding:0 12px;gap:6px;display:flex}
+
+/* 1. 표지 */
+.cover .logo{position:absolute;left:128px;top:128px;width:346px;height:auto}
+.cover h1{position:absolute;left:124px;top:290px;margin:0;font-size:136px;font-weight:800;letter-spacing:-.03em;color:#2b2b2b;line-height:1.1}
+.cover p{position:absolute;left:128px;top:470px;margin:0;font-size:40px;line-height:1.5;color:#6b7078}
+.flow{position:absolute;left:128px;top:781px;display:flex;align-items:center}
+.flow span{height:85px;padding:0 40px;border:2px solid var(--line);border-radius:999px;display:flex;align-items:center;font-size:33px;font-weight:700;color:var(--ink);background:#fff}
+.flow i{width:58px;height:2px;background:var(--line)}
+
+/* 2. 전체 흐름 */
+.ov .eyebrow{position:absolute;left:128px;top:128px;font-size:27px;font-weight:700;letter-spacing:.08em;color:var(--orange)}
+.ov h2{position:absolute;left:128px;top:168px;margin:0;font-size:66px;font-weight:800;letter-spacing:-.03em}
+.ov .grid{position:absolute;left:128px;top:340px;width:1664px}
+.ov .head{display:flex;margin-left:160px;height:200px}
+.ov .head>div{flex:1;margin-left:-18px;padding:40px 0 0 50px;background:var(--gray-soft);clip-path:polygon(0 0,calc(100% - 36px) 0,100% 50%,calc(100% - 36px) 100%,0 100%,36px 50%)}
+.ov .head>div:first-child{margin-left:0;padding-left:24px;clip-path:polygon(0 0,calc(100% - 36px) 0,100% 50%,calc(100% - 36px) 100%,0 100%)}
+.ov .head .s{font-size:22px;color:var(--muted);font-weight:500}
+.ov .head .t{font-size:40px;font-weight:800;margin:4px 0 12px;white-space:nowrap}
+.ov .head .t small{font-size:24px;font-weight:500;color:var(--muted)}
+.ov .pill{display:inline-block;font-size:19px;font-weight:700;padding:3px 13px;border-radius:999px;margin-right:6px}
+.ov .pill.d{background:var(--orange-soft);color:var(--orange)} .ov .pill.c{background:var(--blue-soft);color:var(--blue)} .ov .pill.g{background:var(--green-soft);color:var(--green)}
+.ov .row{display:flex;margin-top:14px;border-radius:14px;padding:30px 0}
+.ov .row .lab{flex:0 0 184px;padding-left:28px;font-size:30px;font-weight:800;line-height:1.2;display:flex;align-items:center}
+.ov .row .cell{flex:1;font-size:25px;line-height:1.45;color:var(--text);padding-right:20px}
+.ov .row.d{background:#fff6ef} .ov .row.d .lab{color:var(--orange)}
+.ov .row.g{background:#e7f4ef} .ov .row.g .lab{color:var(--green)}
+.ov .row.c{background:#edf3ff} .ov .row.c .lab{color:var(--blue)}
+
+/* 7. 온라인이전 */
+.t-shop .chev.sm{left:auto;right:128px;top:145px;height:99px}
+.t-shop .chev.sm span{width:150px;font-size:22px;margin-left:-14px;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,0 100%,22px 50%)}
+.t-shop .chev.sm span:first-child{margin-left:0;clip-path:polygon(0 0,calc(100% - 22px) 0,100% 50%,calc(100% - 22px) 100%,0 100%)}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="home" href="./index.html">← 처음으로</a>
+  <span class="ttl">원프로세스 프로토타입</span>
+  <div class="ctrl">
+    <button id="play" class="play" aria-label="자동재생 일시정지">⏸ 일시정지</button>
+    <div class="dots" id="dots"></div>
+    <button id="prev" aria-label="이전 슬라이드">‹</button>
+    <span class="cnt" id="cnt">1 / 8</span>
+    <button id="next" aria-label="다음 슬라이드">›</button>
+  </div>
+</header>
+
+<main class="stage"><div class="deck" id="deck">
+
+  <!-- 1. 표지 -->
+  <section class="slide cover">
+    <img class="logo" src="oneprocess_img/logo.png" alt="mobility365">
+    <h1>One Process</h1>
+    <p>할부, 보험, 전자계약부터 이전등록까지,<br>중고차 구매의 모든 단계를 하나의 서비스로 연결합니다.</p>
+    <div class="flow"><span>차량 선택</span><i></i><span>할부</span><i></i><span>보험</span><i></i><span>전자계약</span><i></i><span>온라인 이전</span></div>
+  </section>
+
+  <!-- 2. 전체 흐름 -->
+  <section class="slide ov">
+    <div class="eyebrow">ONE PROCESS</div>
+    <h2>할부, 보험, 전자계약 그리고 이전까지, 하나의 흐름으로</h2>
+    <div class="grid">
+      <div class="head">
+        <div><div class="s">STEP 1</div><div class="t">차량 선택</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 2</div><div class="t">할부</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 3</div><div class="t">보험</div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 4</div><div class="t">전자계약 <small>(+보험)</small></div><span class="pill d">딜러</span><span class="pill c">고객</span></div>
+        <div><div class="s">STEP 5</div><div class="t">온라인 이전</div><span class="pill g">상사/사무장</span><span class="pill c">고객</span></div>
+      </div>
+      <div class="row d"><div class="lab">딜러</div><div class="cell">고객과 차량 상담</div><div class="cell">m365에서<br>할부상담 신청 연계</div><div class="cell">보험상담 ·<br>다이렉트 보험 연계</div><div class="cell">전자계약 작성,<br>서명 요청</div><div class="cell"></div></div>
+      <div class="row g"><div class="lab">상사/<br>사무장</div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell">온라인으로<br>이전등록 진행</div></div>
+      <div class="row c"><div class="lab">고객</div><div class="cell">구매할 차량 선택</div><div class="cell">문자 링크로<br>금융사 페이지에서<br>바로 신청</div><div class="cell">문자 링크로<br>바로 가입 및 상담신청</div><div class="cell">알림톡으로 받아<br>전자서명부터<br>보험가입 및 상담신청</div><div class="cell">완료 알림톡으로<br>자동차등록증 수신</div></div>
+    </div>
+  </section>
+
+  <!-- 3. 딜러 · 할부상담 신청 연계 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">할부상담 신청 연계</h2>
+    <div class="chev"><span>차량 선택</span><span class="on">할부</span><span>보험</span><span>전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>차량목록에서 할부 상담 진행할 차량 선택</li>
+      <li><span class="n">2</span>고객 이름/휴대폰 번호 입력 후 [한도조회] or [상담신청] 선택</li>
+      <li><span class="n">3</span>딜러가 문자로 안내메세지 및 url 전송</li>
+    </ol>
+    <p class="note">할부 한도조회 또는 상담신청 시 필요한 차량 데이터 제공 가능</p>
+    <div class="dev phone" id="proto-installment" title="클릭하면 다음 단계로 넘어갑니다"><div class="scr"><div class="vp"></div></div></div>
+    <div class="pc phone" data-for="proto-installment"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+  </section>
+
+  <!-- 4. 딜러 · 보험 가입 연계 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">보험 가입 연계</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span class="on">보험</span><span>전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>차량목록에서 차량 선택</li>
+      <li><span class="n">2</span>고객 이름/휴대폰 번호 입력 후 [다이렉트] or [비교견적] 선택</li>
+      <li><span class="n">3</span>딜러가 문자로 안내메세지 및 url 전송</li>
+    </ol>
+    <p class="note">현장에서 하던 업무 스타일 그대로,</p>
+    <div class="dev phone" id="proto-insurance" title="클릭하면 다음 단계로 넘어갑니다"><div class="scr"><div class="vp"></div></div></div>
+    <div class="pc phone" data-for="proto-insurance"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+  </section>
+
+  <!-- 5. 딜러 · 전자계약 작성 -->
+  <section class="slide t-dealer">
+    <div class="tag dealer">딜러</div>
+    <h2 class="h1">전자계약 작성</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span class="on">전자계약</span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>매도계약 작성 선택</li>
+      <li><span class="n">2</span>계약정보 및 고객정보 입력</li>
+      <li><span class="n">3</span>딜러 서명 후 전자계약 전송</li>
+    </ol>
+    <div class="dev phone" id="proto-econtract" title="클릭하면 다음 단계로 넘어갑니다"><div class="scr"><div class="vp"></div></div></div>
+    <div class="pc phone" data-for="proto-econtract"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+  </section>
+
+  <!-- 6. 고객 · 전자계약 서명 후 보험 가입 -->
+  <section class="slide t-customer">
+    <div class="tag customer">고객</div>
+    <h2 class="h1">전자계약 서명 후 보험 가입</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span class="on">전자계약<small>(+보험)</small></span><span>온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>서명요청 알림톡 수신</li>
+      <li><span class="n">2</span>모바일에서 계약서 확인 후 전자서명</li>
+      <li><span class="n">3</span>이전등록 전 자동차보험 가입 안내</li>
+      <li><span class="n">4</span>보험 미가입 고객은 다이렉트 or 비교견적 상담 신청까지 가능</li>
+    </ol>
+    <p class="note" style="top:862px">이전등록에는 자동차보험 가입이 필요해, 계약 직후가 고객에게 한번 더 보험 가입을 유도합니다.</p>
+    <div class="dev phone" id="proto-sign" title="클릭하면 다음 단계로 넘어갑니다"><div class="scr"><div class="vp"></div></div></div>
+    <div class="pc phone" data-for="proto-sign"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+  </section>
+
+  <!-- 7. 상사/사무장 · 온라인 이전 신청 -->
+  <section class="slide t-shop">
+    <div class="tag shop">상사/사무장</div>
+    <h2 class="h1">온라인 이전 신청</h2>
+    <div class="chev sm"><span>차량 선택</span><span>할부</span><span>보험</span><span>전자계약</span><span class="on">온라인 이전</span></div>
+    <div class="pc web" data-for="proto-transfer"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+    <div class="dev web" id="proto-transfer" title="클릭하면 다음 단계로 넘어갑니다"><div class="chrome"><i></i><i></i><i></i><span>m365 · 온라인이전</span></div><div class="scr"><div class="vp"></div></div></div>
+  </section>
+
+  <!-- 8. 고객 · 이전 완료 후 자동차등록증 확인 -->
+  <section class="slide t-customer">
+    <div class="tag customer">고객</div>
+    <h2 class="h1">이전 완료 후 자동차등록증 확인</h2>
+    <div class="chev"><span>차량 선택</span><span>할부</span><span>보험</span><span>전자계약</span><span class="on">온라인 이전</span></div>
+    <ol class="steps">
+      <li><span class="n">1</span>이전완료 알림톡 수신</li>
+      <li><span class="n">2</span>휴대폰 번호 뒤 4자리로 본인 확인</li>
+      <li><span class="n">3</span>모바일에서 자동차등록증 바로 확인</li>
+    </ol>
+    <p class="note">고객은 등록증을 따로 받으러 가거나 요청할 필요가 없습니다.</p>
+    <div class="dev phone" id="proto-certificate" title="클릭하면 다음 단계로 넘어갑니다"><div class="scr"><div class="vp"></div></div></div>
+    <div class="pc phone" data-for="proto-certificate"><div class="seg"></div><span class="num"></span><button type="button" class="again">↻ 처음부터</button></div>
+  </section>
+
+</div></main>
+
+<script>
+/* 화면 흐름 데이터: Figma 프로토타입의 클릭 연결을 그대로 옮김
+   [이미지 파일명, 누르는 영역 [x,y,너비,높이](없으면 마지막 화면), 'sheet'(하단 시트), 시트 높이] */
+var FLOWS={
+  'proto-installment':[['102-1295',[16,243,358,200]],['102-1311',[20,347,350,158]],['102-1364',[200,560,170,48]],['102-1417',[16,770,358,52]],['102-1511',[16,770,358,52]],['102-1469']],
+  'proto-insurance':[['102-1612',[16,243,358,200]],['202-6214',[20,249,350,137]],['205-6215',[200,439,170,48]],['205-6216',[16,770,358,52]],['102-1579',[130,275,240,52],'sheet',366],['102-1471']],
+  'proto-econtract':[['128-1466',[22,181,168,217]],['128-1903',[22,187,347,90],'sheet',387],['1-4780',[16,309,355,224]],['1-2268',[17,653,355,132]],['1-3193',[17,960,355,132],'keep'],['1-3196',[17,1252,355,123],'keep'],['1-3197',[17,1483,355,50],'keep'],['1-3203',[17,520,355,75]],['1-3204',[17,1487,355,50]],['1-3727',[283,787,90,37]],['1-4225',[17,180,355,217]],['1-4247',[17,765,355,50]],['1-4309',[306,784,76,37]],['1-4310',[17,755,355,50]],['1-4312']],
+  'proto-sign':[['148-1696',[67,649,234,39]],['148-1775',[17,755,355,50]],['152-2402',[17,755,355,50]],['148-1549',[283,788,90,37]],['148-1665',[17,180,355,217]],['148-1845',[17,765,355,50]],['148-1893',[297,790,76,37]],['152-2588',[17,755,355,50]],['152-2494',[15,520,363,71]],['152-2802',[11,514,368,50],'sheet',585],['152-2872',[18,764,355,50]],['152-2555']],
+  'proto-transfer':[['179-4049',[1009,188,56,26]],['179-4053',[1223,245,157,41]],['179-4212',[454,337,926,118]],['179-4096',[454,337,926,118]],['179-4319',[454,337,926,118]],['179-4259',[454,337,926,118]],['179-4377']],
+  'proto-certificate':[['152-2952',[67,571,234,39]],['152-3016',[94,319,202,54]],['168-1696',[15,763,355,50]],['172-563',[18,410,354,48]],['168-1665']]
+};
+var IMG='oneprocess_img/flow/';
+var DWELL=[4500,9000]; /* 화면 없는 슬라이드(표지, 전체 흐름)를 보여주는 시간(ms) */
+
+(function(){
+  var deck=document.getElementById('deck'), slides=[].slice.call(deck.querySelectorAll('.slide'));
+  var dots=document.getElementById('dots'), cnt=document.getElementById('cnt'), prev=document.getElementById('prev'), next=document.getElementById('next'), playBtn=document.getElementById('play');
+  var cur=0, RUN=0, paused=false, ended=false, skip=false;
+  slides.forEach(function(_,i){ var b=document.createElement('button'); b.setAttribute('aria-label',(i+1)+'번 슬라이드'); b.addEventListener('click',function(){go(i)}); dots.appendChild(b); });
+  function fit(){ var st=deck.parentNode, s=Math.min(st.clientWidth/1920, st.clientHeight/1080)*0.95; deck.style.transform='translate(-50%,-50%) scale('+s+')'; }
+
+  /* 일시정지·건너뛰기를 지원하는 대기 */
+  function wait(ms,tok){ return new Promise(function(res){ var t=0,last=Date.now(); var iv=setInterval(function(){ var now=Date.now(); if(!paused) t+=now-last; last=now;
+    if(tok!==RUN){clearInterval(iv);res(false);} else if(skip&&!paused){skip=false;clearInterval(iv);res(true);} else if(t>=ms){clearInterval(iv);res(true);} },40); }); }
+  function el(tag,cls,parent){ var e=document.createElement(tag); if(cls) e.className=cls; if(parent) parent.appendChild(e); return e; }
+  function preload(i){ var d=slides[i]&&slides[i].querySelector('.dev'); if(!d) return; FLOWS[d.id].forEach(function(st){ new Image().src=IMG+st[0]+'.jpg'; }); }
+  function imgReady(img){ return img.complete?Promise.resolve():new Promise(function(r){ img.onload=img.onerror=r; }); }
+
+  /* 한 슬라이드의 화면 흐름 재생 */
+  async function playFlow(dev,tok){
+    var steps=FLOWS[dev.id], vp=dev.querySelector('.vp'), web=dev.classList.contains('web');
+    var VW=web?1440:390, VH=web?701:844;
+    var pc=document.querySelector('.pc[data-for="'+dev.id+'"]'), seg=pc.querySelector('.seg'), num=pc.querySelector('.num');
+    vp.innerHTML=''; seg.innerHTML=''; steps.forEach(function(){ el('i','',seg); });
+    var hi=el('div','hi',vp), cu=el('div','cur',vp), layer=null, scroll=0;
+    function progress(i){ [].forEach.call(seg.children,function(b,k){ b.className=k<=i?'done':''; }); num.textContent=(i+1)+' / '+steps.length; }
+    for(var i=0;i<steps.length;i++){
+      var st=steps[i], sheet=st[2]==='sheet';
+      progress(i);
+      hi.classList.remove('on'); cu.classList.remove('on','press');
+      var img=new Image(); img.src=IMG+st[0]+'.jpg'; img.alt=''; img.draggable=false;
+      await imgReady(img); if(tok!==RUN) return false;
+      if(sheet){
+        var dim=el('div','dim',layer), sh=el('div','sheet',layer); sh.appendChild(img);
+        void sh.offsetWidth; dim.classList.add('on'); sh.classList.add('on');
+      }else{
+        var keep=st[2]==='keep'&&layer; /* 같은 페이지 단계 전환: 스크롤 위치 유지, 제자리에서 바뀜 */
+        var ly=el('div','layer'+(keep?' fade':(layer?' in':'')),null); ly.appendChild(img); vp.insertBefore(ly,hi);
+        if(keep){
+          scroll=Math.min(scroll,Math.max(0,img.naturalHeight*VW/img.naturalWidth-VH));
+          img.style.transition='none'; img.style.transform='translateY('+(-scroll)+'px)'; void ly.offsetWidth; img.style.transition='';
+          ly.classList.remove('fade'); setTimeout(function(o){ return function(){ o.remove(); }; }(layer),350);
+        }else{
+          if(layer){ var old=layer; void ly.offsetWidth; ly.classList.remove('in'); old.classList.add('out'); setTimeout(function(o){ return function(){ o.remove(); }; }(old),500); }
+          scroll=0;
+        }
+        layer=ly;
+      }
+      if(!await wait(i?1100:900,tok)) return false;
+      if(!st[1]){ if(!await wait(2600,tok)) return false; return true; }
+      var x=st[1][0], y=st[1][1], w=st[1][2], h=st[1][3];
+      if(sheet) y+=VH-st[3];
+      else{
+        var H=img.naturalHeight*VW/img.naturalWidth, maxS=Math.max(0,H-VH);
+        if(y<scroll+20||y+h>scroll+VH-4){ scroll=Math.min(maxS,Math.max(0,y+h/2-VH*0.6)); img.style.transform='translateY('+(-scroll)+'px)'; if(!await wait(1000,tok)) return false; }
+        y-=scroll;
+      }
+      hi.style.cssText='left:'+(x-4)+'px;top:'+(y-4)+'px;width:'+(w+8)+'px;height:'+(h+8)+'px';
+      cu.style.left=(x+w/2)+'px'; cu.style.top=(y+h/2)+'px';
+      hi.classList.add('on'); cu.classList.add('on');
+      if(!await wait(750,tok)) return false;
+      cu.classList.add('press');
+      if(!await wait(450,tok)) return false;
+    }
+    return true;
+  }
+
+  /* 슬라이드 단위 자동재생 */
+  async function run(i,tok){
+    preload(i); preload(i+1);
+    var dev=slides[i].querySelector('.dev');
+    var ok=dev?await playFlow(dev,tok):await wait(DWELL[i]||6000,tok);
+    if(!ok) return;
+    if(dev && !await wait(1200,tok)) return;
+    if(i<slides.length-1) go(i+1);
+    else{ ended=true; setPaused(true); }
+  }
+  function setPaused(p){ paused=p; playBtn.textContent=p?(ended?'↻ 처음부터 재생':'▶ 자동재생'):'⏸ 일시정지'; playBtn.setAttribute('aria-label',p?'자동재생 시작':'자동재생 일시정지'); }
+  function go(i){
+    cur=Math.max(0,Math.min(slides.length-1,i)); RUN++; skip=false; if(ended){ ended=false; setPaused(paused); }
+    slides.forEach(function(s,k){ s.classList.toggle('on',k===cur); });
+    [].forEach.call(dots.children,function(b,k){ b.setAttribute('aria-current',k===cur); });
+    cnt.textContent=(cur+1)+' / '+slides.length; prev.disabled=cur===0; next.disabled=cur===slides.length-1;
+    if(location.hash!=='#'+(cur+1)) history.replaceState(null,'','#'+(cur+1));
+    run(cur,RUN);
+  }
+  playBtn.addEventListener('click',function(){ if(ended){ ended=false; setPaused(false); go(0); } else setPaused(!paused); });
+  document.querySelectorAll('.dev').forEach(function(d){ d.addEventListener('click',function(){ skip=true; }); });
+  document.querySelectorAll('.pc .again').forEach(function(b){ b.addEventListener('click',function(){ go(cur); }); });
+  prev.addEventListener('click',function(){go(cur-1)}); next.addEventListener('click',function(){go(cur+1)});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown') go(cur+1);
+    if(e.key==='ArrowLeft'||e.key==='PageUp') go(cur-1);
+    if(e.key===' '){ e.preventDefault(); playBtn.click(); }
+  });
+  addEventListener('resize',fit); fit();
+  go((parseInt(location.hash.slice(1),10)||1)-1);
+})();
+</script>
+</body>
+</html>
